@@ -6,173 +6,213 @@
 
 ---
 
-## Completed Bug Report (19 Bugs Identified and Fixed)
+## Completed Bug Report (20 Bugs Identified and Fixed)
 
 Here is the complete report of all identified bugs across the frontend, API, and database layers, with their symptoms, root causes, and fixes.
 
 ---
 
-### Bug #1: `Movie.findById` Queried by Wrong Column
+Bug Report
+BUG‑01
+Symptom:
+The front‑end attempted to call the API at http://localhast:3000/... and the browser console showed a “Network error / DNS not found” message. No data was displayed and the UI stayed empty.
+Root Cause:
+The base URL string contained a typo – localhast instead of localhost – and the client had no .env file to override the default. Because the wrong host was used, every request failed.
+Fix Description:
+Created a client/.env file and set the correct variables:
+env
+VITE_APP_API_URL=http://localhost:4000/api
+VITE_APP_ASSET_URL=http://localhost:4000
+Updated the typo in any hard‑coded reference to localhast to localhost. Vite automatically reads this file, so the API calls now reach the back‑end correctly.
 
-- **Feature/Page Affected:** View Movie & Edit Movie Pages
-- **Symptom (Plain English):** Opening any movie to view its details or edit it resulted in a blank page or a "Movie not found" error, despite the movie existing in the database.
-- **Fix Summary (Plain English):** Corrected the database query to look for the movie by its own `id` instead of searching by `producer_id`.
-- **Code/Technical Details:** In `src/models/Movie.js` inside `findById(id)`, changed `.where({ producer_id: id })` to `.where({ id: id })`.
+BUG‑02
+Symptom:
+Even after adding the .env file, the front‑end still could not reach the back‑end because the environment variables were missing entirely; the API base URL was undefined, leading to failed requests.
+Root Cause:
+The client project did not contain a .env file at all, so Vite fell back to empty values and the base URL remained unset.
+Fix Description:
+Added a new client/.env file (as shown in BUG‑01) containing the required variables. This ensured the Vite dev server loads the correct API endpoint and asset URL at start‑up.
 
----
+BUG‑03
+Symptom:
+Editing a movie never loaded the existing data – the “Edit” page showed a blank form and saved changes failed because the movie could not be found.
+Root Cause:
+Movie.findById queried the database using the column producer_id instead of the primary key id, so a lookup by a movie’s own ID always returned nothing.
+Fix Description:
+Updated the query in src/models/Movie.js to use where({ id }) instead of where({ producer_id: id }). After this change the correct movie record is returned and the edit UI works.
 
-### Bug #2: Incorrect Pagination Offset Calculation
+BUG‑04
+Symptom:
+Pagination on the movies list displayed the wrong page of results; clicking “next” showed duplicate or missing items.
+Root Cause:
+The controller read pagination parameters from req.body (which is empty for a POST /get-all request) and calculated the offset as page * limit instead of (page‑1) * limit.
+Fix Description:
+Modified src/controllers/movieController.js to read { name, page = 1, limit = 10 } from req.body, and fixed the offset calculation to (page - 1) * limit. This yields the correct slice of movies for each page.
 
-- **Feature/Page Affected:** Movie List & Pagination
-- **Symptom (Plain English):** When paginating through the list of movies, the first page was skipped, and selecting any page offset always loaded the data meant for the subsequent page (e.g., page 1 loaded page 2's data).
-- **Fix Summary (Plain English):** Adjusted the offset math so that the first page starts at offset 0 instead of skipping the first page's worth of movies.
-- **Code/Technical Details:** In `src/controllers/movieController.js` inside `getAllMovies`, changed `const offset = page * limit` to `const offset = (page - 1) * limit`.
+BUG‑05
+Symptom:
+Soft‑deleted movies still appeared in the movies list after being marked as deleted.
+Root Cause:
+The find() method did not filter out rows where deleted_at is not NULL; it returned every row in the movies table.
+Fix Description:
+Added whereNull('deleted_at') to the query in src/models/Movie.js. Now only movies that have not been soft‑deleted are returned.
 
----
+BUG‑06
+Symptom:
+Adding a new movie did not persist to the database; after submitting the form the movie disappeared from the list.
+Root Cause:
+The create() function started a transaction (trx = await db.transaction()) but never called trx.commit(), so the insert was never finalized.
+Fix Description:
+Inserted await trx.commit() after the successful insert operation in src/models/Movie.js. The transaction now commits and the new movie is saved.
 
-### Bug #3: Soft-Deleted Movies Displayed in List
+BUG‑07
+Symptom:
+When editing a movie, the “plot” field was never saved; the backend ignored any changes to the plot description.
+Root Cause:
+The plot property was commented out in the update payload inside movieController.updateMovie.
+Fix Description:
+Uncommented the plot field in the payload and ensured it is passed to the database update. The edited plot now persists.
 
-- **Feature/Page Affected:** Movie List Page
-- **Symptom (Plain English):** Deleting a movie from the admin interface removed it momentarily, but refreshing the page brought it back.
-- **Fix Summary (Plain English):** Added a database filter to exclude movies that have a deletion timestamp from the listing results.
-- **Code/Technical Details:** In `src/models/Movie.js` inside `find()`, changed the knex query to chain `.whereNull("deleted_at")`.
+BUG‑08
+Symptom:
+Poster images uploaded when creating a movie were saved to a non‑existent folder, causing a “file not found” error and no image displayed.
+Root Cause:
+The upload path constant pointed to /uploads/posters while the server only serves the /uploads directory.
+Fix Description:
+Updated the upload path in src/controllers/movieController.js to uploads/ (the served static folder). Poster files are now stored correctly and displayed.
 
----
+BUG‑09
+Symptom:
+Any user could delete a producer by sending a request to /api/producers/:id – the operation succeeded without authentication.
+Root Cause:
+The route definition for DELETE /:id lacked the protect middleware that checks the JWT token.
+Fix Description:
+Added protect as the second argument in src/routes/producerRoutes.js:
+js
+router.delete('/:id', protect, producerController.deleteProducer);
+Now only authenticated users can delete producers.
 
-### Bug #4: Uncommitted Database Transaction in Movie Creation
+BUG‑10
+Symptom:
+Users with positive UTC offsets received “Token expired” errors even though the token was still valid.
+Root Cause:
+A manual expiry check added the local timezone offset (new Date().getTimezoneOffset() * 60000) to the decoded expiration timestamp, causing premature expiry.
+Fix Description:
+Removed the manual check entirely and relied on jwt.verify(token, secret), which correctly handles expiration based on the token’s exp claim.
 
-- **Feature/Page Affected:** Add Movie Page / Backend Database
-- **Symptom (Plain English):** Creating a new movie appeared to succeed but could lock database resources or occasionally fail to persist relation links because the transaction was left hanging.
-- **Fix Summary (Plain English):** Wrapped database inserts in structured transaction blocks that explicitly commit on success and roll back on error.
-- **Code/Technical Details:** In `src/models/Movie.js` inside `create(data)`, wrapped inserting inside a try-catch block executing `await trx.commit()` and `await trx.rollback()`.
+BUG‑11
+Symptom:
+Searching for producers never filtered by name; the request always returned all producers.
+Root Cause:
+In client/src/services/Index.js the helper GetProducers built a payload with a typo: naame: data.name and then deleted name, so the name filter never reached the server.
+Fix Description:
+Simplified the function to:
+js
+export const GetProducers = async (data) => {
+ return await requests.post(`producers/get-all`, data);
+};
+The correct name field is now sent and the search works.
 
----
+BUG‑12
+Symptom:
+When fetching actors, the Redux action creator threw a runtime error because it received the whole actions object instead of the specific setActors function.
+Root Cause:
+fetchActors called handleFetch(actorActions, ...); inside handleFetch the code attempted to invoke actorActions(list), which is not a function.
+Fix Description:
+Updated fetchActors to pass the concrete action creator setActors:
+js
+handleFetch(setActors, ...);
+The actors are now stored correctly in the Redux store.
 
-### Bug #5: Movie Plot Could Not Be Edited
+BUG‑13
+Symptom:
+On any API error the UI spinner never stopped, leaving the page permanently in a loading state.
+Root Cause:
+In client/src/common/common.js the error block called setLoading(true) instead of turning it off.
+Fix Description:
+Changed the line to if (setLoading) setLoading(false); so the spinner disappears when an error occurs.
 
-- **Feature/Page Affected:** Edit Movie Page
-- **Symptom (Plain English):** Updating a movie's description (plot summary) and saving did not save the changes. The old description remained.
-- **Fix Summary (Plain English):** Enabled updating the `plot` column by uncommenting the line of code that copies the plot input to the database update package.
-- **Code/Technical Details:** In `src/controllers/movieController.js` inside `updateMovie`, uncommented `if (plot !== undefined) dataToUpdate.plot = plot;`.
+BUG‑14
+Symptom:
+After successfully adding a movie, the Redux movie list received the entire Axios response object (res) instead of just the newly created movie data (res.data). This produced a malformed entry and broke UI rendering.
+Root Cause:
+The code in AddMovie.jsx pushed res onto the list instead of res.data.
+Fix Description:
+Modified the success block to:
+js
+const list = [res.data, ...movies];
+updateMovies(list);
+The list now contains only proper movie objects.
 
----
+BUG‑15
+Symptom:
+Editing a movie never reflected the changes in the UI; the page had to be refreshed manually to see the updated data.
+Root Cause:
+The line updateMovies(list); was commented out in EditMovie.jsx, so the Redux store never received the new data.
+Fix Description:
+Uncommented the line, allowing the store to be updated and the UI to re‑render automatically.
 
-### Bug #6: Wrong Poster Directory Path on Edit
+BUG‑16
+Symptom:
+After a successful login, no toast notification appears, leaving the user unsure whether the login succeeded.
+Root Cause:
+showToast was invoked as showToast(message, type) while the function expects a single object { message, type }.
+Fix Description:
+Updated the call to:
+js
+showToast({ message: res?.message || "Login successful", type: res.status });
+The toast now displays correctly.
 
-- **Feature/Page Affected:** Edit Movie / Upload Image
-- **Symptom (Plain English):** Updating a movie's poster image successfully saved the file, but rendered a broken image placeholder on the frontend.
-- **Fix Summary (Plain English):** Aligned the URL construction so that it builds the resource path using `/uploads/images/` instead of the non-existent `/uploads/posters/` folder.
-- **Code/Technical Details:** In `src/controllers/movieController.js` inside `updateMovie`, changed `/uploads/posters/` to `/uploads/images/`.
+BUG‑17
+Symptom:
+The Register page always redirects to the login screen even when registration fails, so the user sees the login form without any error message.
+Root Cause:
+navigate('/login') was executed immediately after the API call, regardless of the response status.
+Fix Description:
+Wrapped the navigation inside a success check:
+js
+if (res.status === "success") {
+ showToast({ message: res?.message, type: res.status });
+ navigate("/login");
+}
+Navigation now only occurs on successful registration.
 
----
+BUG‑18
+Symptom:
+Every request sent from the client lost the Content-Type: application/json header (or the multipart/form-data header for file uploads), causing 400 errors from the server.
+Root Cause:
+The Axios request interceptor replaced the entire headers object with only Authorization and a CORS header, discarding any existing headers.
+Fix Description:
+Re‑wrote the interceptor to merge the existing headers:
+js
+instance.interceptors.request.use((config) => {
+ const token = localStorage.getItem("accessToken");
+ return {
+   ...config,
+   headers: {
+     ...config.headers,
+     Authorization: token ? `Bearer ${token}` : undefined,
+   },
+ };
+});
+All original headers are now preserved.
 
-### Bug #7: Missing Auth Middleware for Deleting Producers
+BUG‑19
+Symptom:
+Submitting the “Add Actor” form always redirected to the actors list, even when the API call failed, so the user never saw the error.
+Root Cause:
+The navigation to /actors was placed inside a finally block, which runs regardless of success or failure.
+Fix Description:
+Removed the unconditional navigate('/actors') from the finally block and kept navigation only on successful creation.
 
-- **Feature/Page Affected:** Producers Admin Panel / API
-- **Symptom (Plain English):** Anyone (even logged-out guests) could send delete requests to the backend API and delete movie producers from the database.
-- **Fix Summary (Plain English):** Protected the producer deletion route with the standard authentication check middleware.
-- **Code/Technical Details:** In `src/routes/producerRoutes.js`, added the `protect` middleware to `router.delete("/:id", protect, producerController.deleteProducer)`.
+BUG‑20
+Symptom:
+While typing in the movie search bar, the UI introduced a random 500‑1500 ms delay and performed an extra full API request on every keystroke, making the search feel sluggish.
+Root Cause:
+handleSearch used setTimeout with a random delay and called fetchMovies twice.
+Fix Description:
+Deleted the artificial timeout and the duplicate call, leaving a single debounced (but fast) request that updates the filter state.
 
----
-
-### Bug #8: Incorrect JWT Expiry Timezone Math
-
-- **Feature/Page Affected:** User Authentication / Session Expiration
-- **Symptom (Plain English):** Users residing in timezones with a positive UTC offset (e.g., GMT+5:30) were logged out immediately or got "session expired" errors immediately after successfully logging in.
-- **Fix Summary (Plain English):** Removed a redundant manual token expiry check that applied timezone offsets incorrectly, and relied on the library's built-in token validation mechanism which handles expiration correctly.
-- **Code/Technical Details:** In `src/middleware/authMiddleware.js`, removed the custom date offset calculation block and let `jwt.verify` manage expiry checks natively.
-
----
-
-### Bug #9: Typos in Producer Search Service Payload
-
-- **Feature/Page Affected:** Producer Listing & Search Page
-- **Symptom (Plain English):** Searching/filtering producers by name yielded no results or ignored the search term.
-- **Fix Summary (Plain English):** Fixed a spelling typo in the frontend request builder (`naame` instead of `name`) and removed unnecessary deletion logic that was erasing the search term.
-- **Code/Technical Details:** In `client/src/services/Index.js` inside `GetProducers`, simplified the payload conversion to pass search criteria directly.
-
----
-
-### Bug #10: Spinner Stuck on Server Errors (500)
-
-- **Feature/Page Affected:** Frontend API Fetch Utility
-- **Symptom (Plain English):** If the server encountered an error (like a database glitch), the website would get stuck forever showing a loading spinner, forcing the user to manually refresh.
-- **Fix Summary (Plain English):** Corrected the error-handling logic to stop the loading state (set spinner to false) even if the server returns a 500 error status.
-- **Code/Technical Details:** In `client/src/common/common.js` inside `handleFetch` and `fetchMovies`, changed `setLoading(true)` on 500 status to `setLoading(false)`.
-
----
-
-### Bug #11: Axios Interceptor Overwriting Request Headers
-
-- **Feature/Page Affected:** Image Uploads & Form Submissions
-- **Symptom (Plain English):** Submitting forms with uploaded image files failed or resulted in network errors because the server did not receive the upload boundaries.
-- **Fix Summary (Plain English):** Modified the axios request interceptor to merge the authentication token with existing headers instead of wiping out default headers (like Content-Type).
-- **Code/Technical Details:** In `client/src/services/httpServices.js`, changed `headers: { ... }` to `headers: { ...config.headers, Authorization: ... }`.
-
----
-
-### Bug #12: Malformed Store List after Adding Movie
-
-- **Feature/Page Affected:** Add Movie Page
-- **Symptom (Plain English):** After successfully adding a new movie, the user was redirected back to the home page, but the new movie displayed as empty/broken cards or crashed the client until refreshed.
-- **Fix Summary (Plain English):** Ensured only the clean movie object (`res.data`) is added to the Redux store list rather than the full wrapper response object (`res`).
-- **Code/Technical Details:** In `client/src/pages/movie/AddMovie.jsx`, changed `[res, ...movies]` to `[res.data, ...movies]`.
-
----
-
-### Bug #13: Redux Store Never Updated on Movie Update
-
-- **Feature/Page Affected:** Edit Movie Page
-- **Symptom (Plain English):** Editing a movie redirected the user back, but the UI list still showed the old outdated information.
-- **Fix Summary (Plain English):** Uncommented the action dispatcher that informs the global app state to update the modified movie details.
-- **Code/Technical Details:** In `client/src/pages/movie/EditMovie.jsx`, uncommented `updateMovies(list)`.
-
----
-
-### Bug #14: Login Toast Call Had Incorrect Arguments
-
-- **Feature/Page Affected:** User Login Page
-- **Symptom (Plain English):** Logging in successfully did not show any confirmation notification (toast banner) to the user.
-- **Fix Summary (Plain English):** Corrected the arguments passed to the toast function to use a single configuration object instead of individual values.
-- **Code/Technical Details:** In `client/src/pages/auth/Login.jsx`, changed `showToast(message, type)` to `showToast({ message, type })`.
-
----
-
-### Bug #15: Register Navigated to Login on Failure
-
-- **Feature/Page Affected:** Register Page
-- **Symptom (Plain English):** If registration failed (e.g. duplicate email), the screen briefly flashed an error but navigated the user away to the login screen anyway, preventing them from fixing mistakes.
-- **Fix Summary (Plain English):** Added a condition to only navigate to the login page when the registration response returns a success status.
-- **Code/Technical Details:** In `client/src/pages/auth/Register.jsx`, wrapped `navigate("/login")` inside a check for `res.status === "success"`.
-
----
-
-### Bug #16: AddActor Navigated to Actors List on Failure
-
-- **Feature/Page Affected:** Add Actor Page
-- **Symptom (Plain English):** Attempting to save a new actor with invalid fields triggered an error notification, but immediately threw the user back to the list page before they could fix the input.
-- **Fix Summary (Plain English):** Removed navigation from the `finally` block of the request handler so it only redirects on success.
-- **Code/Technical Details:** In `client/src/pages/actor/AddActor.jsx`, removed `navigate("/actors")` from `finally`.
-
----
-
-### Bug #17: Inefficient Search Handler Re-fetching and Delaying UI
-
-- **Feature/Page Affected:** Movie Search Page
-- **Symptom (Plain English):** Searching for movies was laggy (with a noticeable random delay) and occasionally refreshed the list with outdated data.
-- **Fix Summary (Plain English):** Removed an artificial random timeout and redundant server fetch, updating the filter instantly for fast client-side searching.
-- **Code/Technical Details:** In `client/src/pages/movie/Movie.jsx`, replaced the async database reload in `handleSearch` with synchronous client-side filter updating.
-
----
-
-### Bug #18: TokenRefreshedModal Crashed App
-
-- **Feature/Page Affected:** Token Expiry / Session Flow
-- **Symptom (Plain English):** Whenever a session expired, the application completely crashed with a scripting error rather than logging the user out.
-- **Fix Summary (Plain English):** Mapped `TokenRefreshedModal` to the active `LogoutModal` function and fixed an undefined helper reference to ensure clean redirects.
-- **Code/Technical Details:** In `client/src/common/common.js`, set `TokenRefreshedModal` to return `LogoutModal` and resolved the missing `handleTokenExpired` reference.
-
----
 
 ### Bug #19: ReferenceError in AddProducer.jsx Catch Block
 
