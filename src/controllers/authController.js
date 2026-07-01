@@ -7,7 +7,8 @@ const generateToken = (id) => {
 };
 
 exports.register = async (req, res) => {
-  const { name, email, password } = req.body;
+ const nameValue = req.body.username || req.body.name;
+  const { email, password } = req.body;
 
   try {
     const userExists = await User.findOne({ email });
@@ -20,13 +21,13 @@ exports.register = async (req, res) => {
       });
     }
 
-    const user = await User.create({ name, email, password });
+    const user = await User.create({ name: nameValue, email, password });
 
     sendResponse(res, {
       statusCode: 201,
       data: {
         id: user.id,
-        name: user.name,
+        username: user.name,
         email: user.email,
         token: generateToken(user.id),
       },

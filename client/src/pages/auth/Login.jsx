@@ -29,7 +29,7 @@ const Login = () => {
           res.data.name === "admin" ? "admin" : "user",
         );
         localStorage.setItem("userName", res.data.name);
-        showToast(res?.message || "Something went wrong", res.status);
+        showToast({ message: res?.message || "Login successful", type: res.status });
         setTimeout(() => {
           navigate("/actors");
         }, 1000);

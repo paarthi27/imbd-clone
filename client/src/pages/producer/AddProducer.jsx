@@ -77,7 +77,7 @@ const AddProducer = () => {
         TokenRefreshedModal();
       } else if (err?.response?.data?.status == "field_error") {
         const errFields = {};
-        error.response.data.err?.forEach((e) => {
+        err.response.data.err?.forEach((e) => {
           errFields[e.field] = e.message;
         });
         setErrors(errFields);

@@ -4,6 +4,8 @@ import { FiEdit, FiEye, FiTrash2 } from "react-icons/fi";
 import Common from "../common/common";
 import "./MovieCard.css"; // Import the CSS file
 
+
+
 const MovieCard = ({ data, setShowConfirm, setTargetMovie }) => {
   const { navigate } = Common();
   return (

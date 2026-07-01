@@ -16,15 +16,6 @@ exports.protect = async (req, res, next) => {
 
     const token = authHeader.split(" ")[1];
 
-    const decodedExp = jwt.decode(token);
-    if (
-      decodedExp &&
-      decodedExp.exp * 1000 + new Date().getTimezoneOffset() * 60000 <
-        Date.now()
-    ) {
-      throw new Error("Token expired manually");
-    }
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const user = await User.findById(decoded.id);

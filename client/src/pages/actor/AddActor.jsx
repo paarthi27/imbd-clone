@@ -82,7 +82,6 @@ const AddActor = () => {
       }
     } finally {
       setLoading(false);
-      navigate("/actors");
     }
   };
 

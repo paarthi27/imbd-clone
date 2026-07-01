@@ -1,5 +1,8 @@
 # TECH ASSESSMENT
 
+**Google Doc Link:** [Bug Report – Candidate (view)](https://docs.google.com/document/d/1x21Xp1EJtlbr7iqc0Exuu0Gd_nCal4_JvpMD1txqM8E/edit?usp=sharing)
+*Note: All 19 bugs have been fully documented in [Candidate_Bug_Report.md](file:///c:/Users/Paarthibah/OneDrive/Desktop/assessment/tech-assesment/Candidate_Bug_Report.md). You can copy-paste its content into your Google Doc.*
+
 This repository contains both the frontend (React/Vite) and the backend (Node.js/Express) for the IMDB Clone application.
 
 ## Directory Structure

@@ -83,7 +83,7 @@ const AddMovie = () => {
 
       const res = await CreateMovie(data);
       if (res.status == "success") {
-        const list = [res, ...movies];
+        const list = [res.data, ...movies];
         updateMovies(list);
         navigate(-1);
         showToast({

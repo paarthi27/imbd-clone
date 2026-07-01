@@ -40,7 +40,7 @@ const Common = () => {
       }
 
       if (err?.response?.status === 500) {
-        if (setLoading) setLoading(true);
+        if (setLoading) setLoading(false);
         return;
       }
     } finally {
@@ -82,7 +82,7 @@ const Common = () => {
     } catch (err) {
       console.error(err);
       if (err?.response?.data?.message == "Token refreshed") {
-        handleTokenExpired();
+        LogoutModal();
       } else {
         // Set error toast
         if (err?.response?.status !== 500) {
@@ -93,7 +93,7 @@ const Common = () => {
         }
       }
       if (err?.response?.status === 500) {
-        if (setLoading) setLoading(true);
+        if (setLoading) setLoading(false);
         return;
       }
     } finally {
@@ -116,7 +116,7 @@ const Common = () => {
     dispatch,
     navigate,
     LogoutModal,
-    TokenRefreshedModal: "",
+    TokenRefreshedModal: LogoutModal,
     fetchActors,
     updateActors,
     fetchProducers,

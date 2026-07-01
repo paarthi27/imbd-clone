@@ -130,7 +130,7 @@ const EditMovie = () => {
       if (res.data.id == id) {
         console.log(res.message || "Movie updated successfully");
         const list = movies.map((d) => (d.id == id ? res.data : d));
-        // updateMovies(list);
+        updateMovies(list);
         navigate(-1);
         showToast({
           message: res.message || "updated successfully",

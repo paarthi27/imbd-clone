@@ -27,7 +27,7 @@ const Movie = {
   },
 
   async find(filter = {}, limit, offset) {
-    let query = db("movies");
+    let query = db("movies").whereNull("deleted_at");
     if (filter.name) {
       const nameVal = filter.name.$regex || filter.name;
       query = query.where("name", "like", `%${nameVal}%`);
@@ -43,7 +43,7 @@ const Movie = {
 
   async findById(id) {
     const movie = await db("movies")
-      .where({ producer_id: id })
+      .where({ id: id })
       .whereNull("deleted_at")
       .first();
     return this._attachRelations(movie);
@@ -54,23 +54,29 @@ const Movie = {
 
     const trx = await db.transaction();
 
-    if (producer) {
-      movieData.producer_id = producer;
+    try {
+      if (producer) {
+        movieData.producer_id = producer;
+      }
+
+      // Insert movie using trx
+      const [movieId] = await trx("movies").insert(movieData);
+
+      // Insert actors using trx
+      if (actors && actors.length > 0) {
+        const actorRelations = actors.map((actorId) => ({
+          movie_id: movieId,
+          actor_id: actorId,
+        }));
+        await trx("movie_actors").insert(actorRelations);
+      }
+
+      await trx.commit();
+      return this.findById(movieId);
+    } catch (err) {
+      await trx.rollback();
+      throw err;
     }
-
-    // Insert movie using trx
-    const [movieId] = await trx("movies").insert(movieData);
-
-    // Insert actors using trx
-    if (actors && actors.length > 0) {
-      const actorRelations = actors.map((actorId) => ({
-        movie_id: movieId,
-        actor_id: actorId,
-      }));
-      await trx("movie_actors").insert(actorRelations);
-    }
-
-    return this.findById(movieId);
   },
 
   async findByIdAndUpdate(id, data, options = {}) {

@@ -23,11 +23,18 @@ const Register = () => {
     setLoading(true);
     try {
       const res = await RegisterUser({ name, email, password });
-      showToast({
-        message: res?.message,
-        type: res.status,
-      });
-      navigate("/login");
+      if (res.status === "success") {
+        showToast({
+          message: res?.message,
+          type: res.status,
+        });
+        navigate("/login");
+      } else {
+        showToast({
+          message: res?.message || "Registration failed",
+          type: "error",
+        });
+      }
     } catch (err) {
       showToast({
         message: err.response?.data?.message || "Something went wrong",

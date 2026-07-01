@@ -5,20 +5,16 @@ const instance = axios.create({
   timeout: 500000,
   headers: {
     Accept: "application/json",
-    "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
   },
 });
 
 instance.interceptors.request.use(function (config) {
   const token = localStorage.getItem("accessToken");
-  return {
-    ...config,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      Authorization: `Bearer ${token}`,
-    },
-  };
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 const responseBody = (response) => response.data;
 
